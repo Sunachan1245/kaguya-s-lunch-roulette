@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>かぐやの昼ごはんルーレット</title>
+<style>
+  :root {
+    --bg: #fff8ef;
+    --text: #3a2a1e;
+    --sub: #8a7362;
+    --accent: #e8573c;
+    --accent-dark: #c2402a;
+    --card: #ffffff;
+    --border: #f0dcc8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+  }
+  h1 {
+    font-size: clamp(1.4rem, 5vw, 2.2rem);
+    margin: 8px 0 6px;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+  .subtitle {
+    margin: 0 0 24px;
+    font-size: clamp(0.95rem, 3.5vw, 1.15rem);
+    color: var(--sub);
+    text-align: center;
+  }
+
+  /* 回転中に下から上へ流れる演出（ルーレットより手前に表示） */
+  .durururu {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    writing-mode: vertical-rl;
+    font-size: clamp(2.4rem, 11vw, 4.5rem);
+    font-weight: 900;
+    letter-spacing: -0.05em;
+    color: var(--accent);
+    -webkit-text-stroke: 2px #fff;
+    paint-order: stroke fill;
+    text-shadow: 0 4px 10px rgba(0,0,0,0.25);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+    transform: translate(-50%, 100vh);
+    visibility: hidden;
+    will-change: transform;
+  }
+  .durururu.run { visibility: visible; }
+
+  /* 止まった瞬間の「だん！」 */
+  .dan {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(5rem, 30vw, 12rem);
+    font-weight: 900;
+    color: var(--accent);
+    -webkit-text-stroke: 4px #fff;
+    paint-order: stroke fill;
+    text-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    pointer-events: none;
+    z-index: 11;
+    visibility: hidden;
+  }
+  .dan.show {
+    visibility: visible;
+    animation: danPop 1.1s ease-out forwards;
+  }
+  @keyframes danPop {
+    0%   { transform: scale(2.6) rotate(-8deg); opacity: 0; }
+    15%  { transform: scale(0.9) rotate(-8deg); opacity: 1; }
+    22%  { transform: scale(1.08) rotate(-8deg) translateX(-6px); }
+    29%  { transform: scale(1) rotate(-8deg) translateX(6px); }
+    36%  { transform: scale(1) rotate(-8deg) translateX(0); }
+    75%  { transform: scale(1) rotate(-8deg); opacity: 1; }
+    100% { transform: scale(1.1) rotate(-8deg); opacity: 0; }
+  }
+  .screen { display: none; width: 100%; max-width: 520px; flex-direction: column; align-items: center; }
+  .screen.active { display: flex; }
+
+  /* スタート画面 */
+  .start-btn {
+    width: min(80vw, 320px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: none;
+    background: radial-gradient(circle at 35% 30%, #ff8a6b, var(--accent) 60%, var(--accent-dark));
+    color: #fff;
+    font-size: clamp(1.6rem, 7vw, 2.4rem);
+    font-weight: bold;
+    line-height: 1.3;
+    cursor: pointer;
+    box-shadow: 0 10px 0 var(--accent-dark), 0 16px 30px rgba(0,0,0,0.2);
+    transition: transform 0.1s, box-shadow 0.1s;
+    margin: 8px 0 32px;
+  }
+  .start-btn:active { transform: translateY(8px); box-shadow: 0 2px 0 var(--accent-dark), 0 6px 14px rgba(0,0,0,0.2); }
+  .start-btn:disabled { background: #ccc; box-shadow: 0 10px 0 #aaa; cursor: not-allowed; }
+
+  .options {
+    width: 100%;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+  }
+  .options h2 { font-size: 1rem; margin: 0 0 4px; }
+  .options p { font-size: 0.85rem; color: var(--sub); margin: 0 0 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    border: 2px solid var(--border);
+    background: #fff;
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-size: 1rem;
+    cursor: pointer;
+    color: var(--text);
+    font-family: inherit;
+  }
+  .chip.on { background: var(--chip-color); border-color: var(--chip-color); color: #fff; font-weight: bold; }
+  .shop-list { margin-top: 14px; font-size: 0.85rem; color: var(--sub); line-height: 1.7; }
+  .warn { color: var(--accent-dark); font-size: 0.9rem; margin-top: 10px; min-height: 1.2em; }
+
+  /* ルーレット画面 */
+  .wheel-wrap { position: relative; width: min(90vw, 460px); aspect-ratio: 1; }
+  canvas { width: 100%; height: 100%; display: block; }
+  .pointer {
+    position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 18px solid transparent; border-right: 18px solid transparent;
+    border-top: 34px solid var(--text);
+    filter: drop-shadow(0 3px 2px rgba(0,0,0,0.3));
+    z-index: 2;
+  }
+  .result {
+    margin-top: 24px; min-height: 4.5em; text-align: center;
+  }
+  .result .label { font-size: 0.95rem; color: var(--sub); }
+  .result .name { font-size: clamp(1.8rem, 8vw, 2.6rem); font-weight: bold; margin-top: 4px; }
+  .result .name.pop { animation: pop 0.5s ease-out; }
+  @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+  .actions { display: flex; gap: 12px; margin-top: 16px; visibility: hidden; }
+  .actions.show { visibility: visible; }
+  .btn {
+    font-family: inherit; font-size: 1rem; font-weight: bold;
+    padding: 12px 22px; border-radius: 12px; cursor: pointer;
+    border: 2px solid var(--accent); background: var(--accent); color: #fff;
+  }
+  .btn.ghost { background: #fff; color: var(--accent); }
+</style>
+</head>
+<body>
+  <h1>🍜 かぐやの昼ごはんルーレット 🍛</h1>
+  <p class="subtitle">今日の昼ごはんに迷っているあなたへ！</p>
+
+  <div id="durururu" class="durururu" aria-hidden="true"></div>
+  <div id="dan" class="dan" aria-hidden="true">だん！</div>
+
+  <!-- スタート画面 -->
+  <section id="startScreen" class="screen active">
+    <button id="startBtn" class="start-btn">ルーレット<br>スタート</button>
+
+    <div class="options">
+      <h2>オプション：お店をしぼる</h2>
+      <p>タップでON/OFFできます</p>
+      <div id="chips" class="chips"></div>
+      <div id="shopList" class="shop-list"></div>
+      <div id="warn" class="warn"></div>
+    </div>
+  </section>
+
+  <!-- ルーレット画面 -->
+  <section id="wheelScreen" class="screen">
+    <div class="wheel-wrap">
+      <div class="pointer"></div>
+      <canvas id="wheel"></canvas>
+    </div>
+    <div class="result">
+      <div id="resultLabel" class="label">回転中…</div>
+      <div id="resultName" class="name"></div>
+    </div>
+    <div id="actions" class="actions">
+      <button id="againBtn" class="btn">もう一回</button>
+      <button id="backBtn" class="btn ghost">条件を変える</button>
+    </div>
+  </section>
+
+<script>
+  // ===== お店データ（ここを編集すれば店を追加・削除できます） =====
+  const CATEGORIES = [
+    { id: "ramen",  name: "ラーメン系",   color: "#e8573c" },
+    { id: "campus", name: "大学内の店",   color: "#3c8ee8" },
+  ];
+  const SHOPS = [
+    { name: "歴史を刻め",   category: "ramen" },
+    { name: "英吉家",       category: "ramen" },
+    { name: "札幌ラーメン", category: "ramen" },
+    { name: "名城食堂",     category: "campus" },
+    { name: "スクエア",     category: "campus" },
+  ];
+  // =================================================================
+
+  const selected = new Set(CATEGORIES.map(c => c.id)); // 初期状態は全部ON
+  const $ = id => document.getElementById(id);
+  const canvas = $("wheel");
+  const ctx = canvas.getContext("2d");
+  let rotation = 0;
+  let spinning = false;
+  let currentShops = [];
+
+  // ---- オプション（チップ） ----
+  function renderOptions() {
+    const chips = $("chips");
+    chips.innerHTML = "";
+    CATEGORIES.forEach(cat => {
+      const b = document.createElement("button");
+      b.className = "chip" + (selected.has(cat.id) ? " on" : "");
+      b.style.setProperty("--chip-color", cat.color);
+      b.textContent = cat.name;
+      b.onclick = () => {
+        selected.has(cat.id) ? selected.delete(cat.id) : selected.add(cat.id);
+        renderOptions();
+      };
+      chips.appendChild(b);
+    });
+    const shops = filteredShops();
+    $("shopList").textContent = shops.length
+      ? "候補：" + shops.map(s => s.name).join("、")
+      : "";
+    $("warn").textContent = shops.length ? "" : "カテゴリを1つ以上選んでください";
+    $("startBtn").disabled = shops.length === 0;
+  }
+
+  function filteredShops() {
+    return SHOPS.filter(s => selected.has(s.category));
+  }
+
+  // ---- 色（同じカテゴリ内で明るさを変える） ----
+  function shopColor(shop, index) {
+    const base = CATEGORIES.find(c => c.id === shop.category).color;
+    const shade = index % 2 === 0 ? 0 : 0.22;
+    return mix(base, "#ffffff", shade);
+  }
+  function mix(hex1, hex2, t) {
+    const a = parseInt(hex1.slice(1), 16), b = parseInt(hex2.slice(1), 16);
+    const r = Math.round(((a >> 16) & 255) * (1 - t) + ((b >> 16) & 255) * t);
+    const g = Math.round(((a >> 8) & 255) * (1 - t) + ((b >> 8) & 255) * t);
+    const bl = Math.round((a & 255) * (1 - t) + (b & 255) * t);
+    return `rgb(${r},${g},${bl})`;
+  }
+
+  // ---- ルーレット描画 ----
+  function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const size = canvas.getBoundingClientRect().width;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawWheel();
+  }
+
+  function drawWheel() {
+    const size = canvas.getBoundingClientRect().width;
+    const cx = size / 2, cy = size / 2, r = size / 2 - 8;
+    const n = currentShops.length;
+    if (!n) return;
+    const arc = (Math.PI * 2) / n;
+    ctx.clearRect(0, 0, size, size);
+
+    // 外枠
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 6, 0, Math.PI * 2);
+    ctx.fillStyle = "#3a2a1e";
+    ctx.fill();
+
+    currentShops.forEach((shop, i) => {
+      const start = rotation + i * arc - Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, start, start + arc);
+      ctx.closePath();
+      ctx.fillStyle = shopColor(shop, i);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // 店名
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(start + arc / 2);
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#fff";
+      const fontSize = Math.max(13, Math.min(22, size / 20));
+      ctx.font = `bold ${fontSize}px "Hiragino Sans", "Noto Sans JP", sans-serif`;
+      ctx.shadowColor = "rgba(0,0,0,0.35)";
+      ctx.shadowBlur = 3;
+      ctx.fillText(shop.name, r - 16, 0);
+      ctx.restore();
+    });
+
+    // 中心
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.14, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#3a2a1e";
+    ctx.stroke();
+  }
+
+  // ---- 回転 ----
+  function spin() {
+    if (spinning) return;
+    spinning = true;
+    $("actions").classList.remove("show");
+    $("resultLabel").textContent = "回転中…";
+    $("resultName").textContent = "";
+    $("resultName").classList.remove("pop");
+
+    const n = currentShops.length;
+    const arc = (Math.PI * 2) / n;
+    const winner = Math.floor(Math.random() * n);
+    const jitter = (Math.random() - 0.5) * arc * 0.7; // 区切り線ぴったりを避ける
+
+    // 当選セクションの中心が上（ポインター）に来る角度
+    const targetMod = -(winner + 0.5) * arc + jitter;
+    const TWO_PI = Math.PI * 2;
+    let delta = (targetMod - rotation) % TWO_PI;
+    if (delta < 0) delta += TWO_PI;
+    const total = delta + TWO_PI * (5 + Math.floor(Math.random() * 3));
+
+    const startRot = rotation;
+    const duration = 4500;
+    const t0 = performance.now();
+
+    const easeOut = t => 1 - Math.pow(1 - t, 4);
+
+    // 「どぅるるる…」演出：止まるまで途切れず流し続ける
+    const flow = $("durururu");
+    const dan = $("dan");
+    dan.classList.remove("show");
+    const FIRST = "どぅるるるるるるるるるるるるる"; // 最初だけ流れる
+    const LOOP  = "るるるるるる";                   // 2回目以降に流れ続ける
+    const vh = window.innerHeight;
+    flow.textContent = FIRST;
+    const firstLen = flow.getBoundingClientRect().height; // 最初のフレーズの長さ
+    flow.textContent = LOOP;
+    const loopLen = flow.getBoundingClientRect().height;  // ループ部分1つ分の長さ
+    // 最初のフレーズ + 画面を常に埋められるだけの「るるる」
+    flow.textContent = FIRST + LOOP.repeat(Math.ceil(vh / loopLen) + 2);
+    flow.style.transform = `translate(-50%, ${vh}px)`;
+    flow.classList.add("run");
+    const speed = vh / 1000; // 約1.0秒で画面の高さ分進む（小さくするほど速い）
+
+    function updateFlow(now) {
+      const offset = (now - t0) * speed;
+      let y = vh - offset;
+      // 「どぅ〜」が画面上に抜けきったら、以降は「るるる」部分だけを継ぎ目なくループ
+      if (y < -firstLen) {
+        y = -firstLen - ((-firstLen - y) % loopLen);
+      }
+      flow.style.transform = `translate(-50%, ${y}px)`;
+    }
+
+    function frame(now) {
+      const t = Math.min((now - t0) / duration, 1);
+      rotation = startRot + total * easeOut(t);
+      drawWheel();
+      updateFlow(now);
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        rotation %= TWO_PI;
+        spinning = false;
+        // 止まった瞬間：るるる を消して「だん！」
+        flow.classList.remove("run");
+        void dan.offsetWidth; // アニメーションを最初から再生
+        dan.classList.add("show");
+        showResult(currentShops[winner]);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function showResult(shop) {
+    const cat = CATEGORIES.find(c => c.id === shop.category);
+    $("resultLabel").textContent = `今日のお昼は…（${cat.name}）`;
+    const name = $("resultName");
+    name.textContent = shop.name + " に決定！";
+    name.style.color = cat.color;
+    void name.offsetWidth; // アニメーション再生用
+    name.classList.add("pop");
+    $("actions").classList.add("show");
+  }
+
+  // ---- 画面切り替え ----
+  function showScreen(id) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    $(id).classList.add("active");
+  }
+
+  $("startBtn").onclick = () => {
+    currentShops = filteredShops();
+    if (!currentShops.length) return;
+    rotation = 0;
+    showScreen("wheelScreen");
+    resizeCanvas();
+    setTimeout(spin, 300);
+  };
+  $("againBtn").onclick = spin;
+  $("backBtn").onclick = () => { if (!spinning) showScreen("startScreen"); };
+  window.addEventListener("resize", () => {
+    if ($("wheelScreen").classList.contains("active")) resizeCanvas();
+  });
+
+  renderOptions();
+</script>
+</body>
+</html>
