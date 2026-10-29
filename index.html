@@ -204,15 +204,31 @@
 <script>
   // ===== お店データ（ここを編集すれば店を追加・削除できます） =====
   const CATEGORIES = [
-    { id: "ramen",  name: "ラーメン系",   color: "#e8573c" },
-    { id: "campus", name: "大学内の店",   color: "#3c8ee8" },
+    { id: "ramen",  name: "ラーメン系",     color: "#e8573c" },
+    { id: "other",  name: "その他のお店",   color: "#3aa76d" },
+    { id: "campus", name: "大学内の店",     color: "#3c8ee8" },
   ];
   const SHOPS = [
-    { name: "歴史を刻め",   category: "ramen" },
-    { name: "英吉家",       category: "ramen" },
-    { name: "札幌ラーメン", category: "ramen" },
-    { name: "名城食堂",     category: "campus" },
-    { name: "スクエア",     category: "campus" },
+    // ラーメン系
+    { name: "歴史を刻め",     category: "ramen" },
+    { name: "英吉家",         category: "ramen" },
+    { name: "東京油そば",     category: "ramen" },
+    { name: "荒畑",           category: "ramen" },
+    { name: "から堂麻辣烫",   category: "ramen" },
+    { name: "YURIN",          category: "ramen" },
+    { name: "札幌ラーメン",   category: "ramen" },
+    // その他のお店
+    { name: "アンジュリ",     category: "other" },
+    { name: "レストラン金鯱", category: "other" },
+    { name: "洋食工房パセリ", category: "other" },
+    { name: "チーケバブ",     category: "other" },
+    // 大学内の店
+    { name: "生協食堂",       category: "campus" },
+    { name: "スクエア",       category: "campus" },
+    { name: "青空ラウンジ",   category: "campus" },
+    { name: "キッチンカー",   category: "campus" },
+    { name: "名城食堂",       category: "campus" },
+    { name: "スガキヤ",       category: "campus" },
   ];
   // =================================================================
 
@@ -308,8 +324,15 @@
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
       ctx.fillStyle = "#fff";
-      const fontSize = Math.max(13, Math.min(22, size / 20));
-      ctx.font = `bold ${fontSize}px "Hiragino Sans", "Noto Sans JP", sans-serif`;
+      // 長い店名は中心の丸にかからないよう自動で文字を小さくする
+      const maxWidth = (r - 16) - (r * 0.14 + 10);
+      let fontSize = Math.max(13, Math.min(22, size / 20));
+      const setFont = () => ctx.font = `bold ${fontSize}px "Hiragino Sans", "Noto Sans JP", sans-serif`;
+      setFont();
+      while (ctx.measureText(shop.name).width > maxWidth && fontSize > 9) {
+        fontSize -= 0.5;
+        setFont();
+      }
       ctx.shadowColor = "rgba(0,0,0,0.35)";
       ctx.shadowBlur = 3;
       ctx.fillText(shop.name, r - 16, 0);
